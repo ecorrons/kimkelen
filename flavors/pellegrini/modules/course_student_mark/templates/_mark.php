@@ -20,7 +20,11 @@
 <?php $subject_configuration = $course_subject_student->getCourseSubject()->getCareerSubjectSchoolYear()->getConfiguration(); ?>
 <?php $counter = 1;?>
 
-
+<?php if ($course_subject_student->getIsNotAverageable()): ?>
+    <div class='mark-container'>
+        <?php echo BaseEvaluatorBehaviour::EXEMPT ?>
+    </div>
+<?php else: ?>
 <?php foreach($marks as $mark): ?>
 
   <?php $field = $form[$course_subject_student->getId().'_'.$mark->getMarkNumber()]; ?>
@@ -50,3 +54,4 @@
 
 <?php $counter++;?>
 <?php endforeach; ?>
+<?php endif; ?>

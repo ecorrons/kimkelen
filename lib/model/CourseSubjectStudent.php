@@ -621,4 +621,55 @@ class CourseSubjectStudent extends BaseCourseSubjectStudent
     return is_null($course_result) ? '' : $course_result->getColor();
   }
 
+  public function openMarks($con) {
+    foreach ($this->getCourseSubjectStudentMarks() as $mark) {
+      $mark->setIsClosed(false);
+        $mark->save($con);
+    }
+  }
+
+  public function closeMarks($con) {
+    foreach ($this->getCourseSubjectStudentMarks() as $mark) {
+      $mark->setIsClosed(true);
+      $mark->save($con);
+    }
+  }
+
+  public function undoExempt($con) {
+    $student_approved_career_subject = StudentApprovedCareerSubjectPeer::retrieveByCourseSubjectStudent($this);
+    if ($student_approved_career_subject) {
+      $student_approved_career_subject->delete($con);
+    }
+    $student_approved_course_subject = StudentApprovedCourseSubjectPeer::retrieveForCourseSujectStudent($this);
+    if ($student_approved_course_subject) {
+      $student_approved_course_subject->delete($con);
+    }
+    $this->openMarks($con);
+    $this->setIsNotAverageable(false);
+    $this->save($con);
+  }
+
+  public function exempt($con) {
+    $this->setIsNotAverageable(true);
+
+    $this->closeMarks($con);
+
+    $student_approved_course_subject = new StudentApprovedCourseSubject();
+    $student_approved_course_subject->setCourseSubject($this->getCourseSubject());
+
+    $student_approved_course_subject->setStudentId($this->getStudentId());
+    $student_approved_course_subject->setSchoolYear($this->getCourseSubject()->getCareerSubjectSchoolYear()->getCareerSchoolYear()->getSchoolYear());
+
+    $student_approved_career_subject = new StudentApprovedCareerSubject();
+    $student_approved_career_subject->setStudentId($this->getStudentId());
+    $student_approved_career_subject->setCareerSubject($this->getCourseSubject()->getCareerSubjectSchoolYear()->getCareerSubject());
+    $student_approved_career_subject->setSchoolYear($this->getCourseSubject()->getCareerSubjectSchoolYear()->getCareerSchoolYear()->getSchoolYear());
+    $student_approved_career_subject->save($con);
+
+    $student_approved_course_subject->setStudentApprovedCareerSubject($student_approved_career_subject);
+    $student_approved_course_subject->save($con);
+
+    $this->setStudentApprovedCourseSubject($student_approved_course_subject);
+    $this->save($con);
+  }
 }

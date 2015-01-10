@@ -83,5 +83,4 @@ class course_student_markComponents extends sfComponents
 
     $this->student_examination_repproved_subjects = StudentExaminationRepprovedSubjectPeer::doSelect($c);
   }
-
 }

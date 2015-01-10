@@ -20,6 +20,12 @@
 <?php use_helper('Javascript', 'Object','I18N','Form', 'Asset') ?>
 <?php echo $form->renderGlobalErrors() ?>
 <?php echo $form->renderHiddenFields() ?>
+
+<?php if ($course_subject_student->getIsNotAverageable()): ?>
+  <div class='mark-container'>
+    <?php echo BaseEvaluatorBehaviour::EXEMPT ?>
+  </div>
+<?php else: ?>
 <?php foreach ($marks as $mark): ?>
   <?php $field = $form[$course_subject_student->getId() . '_' . $mark->getMarkNumber()]; ?>
   <?php $request_value = $sf_request->getParameter($form->getName() . '[' . $course_subject_student->getId() . '_' . $mark->getMarkNumber() . ']'); ?>
@@ -52,3 +58,4 @@
     ?>
   </div>
 <?php endforeach; ?>
+<?php endif; ?>

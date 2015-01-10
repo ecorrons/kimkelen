@@ -171,36 +171,65 @@ class course_student_markActions extends sfActions
   public function executeCalificateNonNumericalMark(sfWebRequest $request)
   {
     $this->course = $this->getCourse();
-    $this->course_subject = $this->course->getCourseSubject();
-    $this->form = new CourseSubjectNonNumericalCalificationsForm($this->course_subject);
-    $this->back_url = $this->getUser()->getAttribute('referer_module');
+    $this->course_subjects = $this->course->getCourseSubjectsForUser($this->getUser());
+    $this->forms = $this->getNonNumericalMarkForms($this->course_subjects);
 
+    $this->back_url = $this->getUser()->getAttribute('referer_module');
+  }
+
+
+  protected function getNonNumericalMarkForms($course_subjects)
+  {
+    $forms = array();
+    foreach ($course_subjects as $course_subject)
+    {
+      $forms[$course_subject->getId()] = new CourseSubjectNonNumericalCalificationsForm($course_subject);
+    }
+
+    return $forms;
   }
 
   public function executeSaveCalificateNonNumericalMark(sfWebRequest $request)
   {
-    if ($request->isMethod('POST'))
-    {
-      $params = $request->getParameter('course_subject_non_numerical_califications');
-      $this->course_subject = CourseSubjectPeer::retrieveByPk($params['course_subject_id']);
-      $this->form = new CourseSubjectNonNumericalCalificationsForm($this->course_subject);
+      //$params = $request->getParameter('course_subject_non_numerical_califications');
 
-      $this->form->bind($request->getParameter($this->form->getName()));
-
-      if ($this->form->isValid())
+      if (!$request->isMethod('POST'))
       {
-        $this->form->save();
+          $this->redirect('shared_student');
+      }
 
-        $this->getUser()->setFlash('notice', 'Se han eximido a los alumnos seleccionados satisfactoriamente.');
-        return $this->redirect(sprintf('@%s', $this->getUser()->getAttribute('referer_module', 'homepage')));
+      $this->course = $this->getCourse();
+      $this->course_subjects = $this->course->getCourseSubjectsForUser($this->getUser());
+      $this->forms = $this->getNonNumericalMarkForms($this->course_subjects);
+
+      $valid = count($this->forms);
+
+      foreach ($this->forms as $form)
+      {
+          $form->bind($request->getParameter($form->getName()));
+
+          if ($form->isValid())
+          {
+              $valid--;
+          }
+      }
+
+      if ($valid == 0)
+      {
+          foreach ($this->forms as $form)
+          {
+              $form->save();
+          }
+
+          $this->getUser()->setFlash('notice', 'Se han guardado los cambios correctamente.');
+          return $this->redirect(sprintf('@%s', $this->getUser()->getAttribute('referer_module', 'homepage')));
       }
       else
       {
-        $this->getUser()->setFlash('error', 'Ocurrieron errores al intentar eximir a los alumnos. Por favor, intente nuevamente la operación.');
-        $this->course = $this->course_subject->getCourse();
-        $this->back_url = $this->getUser()->getAttribute('referer_module');
+          $this->getUser()->setFlash('error', 'Ocurrieron errores al intentar eximir a los alumnos. Por favor, intente nuevamente la operación.');
+          $this->course = $this->course_subject->getCourse();
+          $this->back_url = $this->getUser()->getAttribute('referer_module');
       }
       $this->setTemplate('calificateNonNumericalMark');
-    }
   }
 }

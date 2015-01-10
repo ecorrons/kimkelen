@@ -13,85 +13,81 @@ class CourseSubjectNonNumericalCalificationsForm extends sfFormPropel
 
   public function configure()
   {
-     sfContext::getInstance()->getConfiguration()->loadHelpers(array('Asset', 'Javascript'));
-    $this->widgetSchema->setNameFormat('course_subject_non_numerical_califications[%s]');
-    $this->validatorSchema->setOption("allow_extra_fields", true);
-    $sf_formatter_revisited = new sfWidgetFormSchemaFormatterRevisited($this);
-    $this->getWidgetSchema()->addFormFormatter('Revisited', $sf_formatter_revisited);
-    $this->getWidgetSchema()->setFormFormatterName('Revisited');
+    $widgets    = array();
+    $validators = array();
 
-    $c = new Criteria();
-    $c->addjoin(CourseSubjectStudentPeer::STUDENT_ID, StudentPeer::ID, Criteria::INNER_JOIN);
-    $c->add(CourseSubjectStudentPeer::COURSE_SUBJECT_ID, $this->getObject()->getId());
-    $c->add(CourseSubjectStudentPeer::IS_NOT_AVERAGEABLE, false);
+    $this->disableCSRFProtection();
 
-    $this->setWidget('course_subject_id', new sfWidgetFormInputHidden());
-    $this->setValidator('course_subject_id', new sfValidatorNumber());
-    $this->setDefault('course_subject_id', $this->getObject()->getId());
+     $criteria = new Criteria();
 
-    $this->setWidget("student_list", new sfWidgetFormPropelChoiceMany(array(
-        'model' => 'Student',
-        'add_empty' => false,
-        'multiple' => true,
-        'peer_method' => 'doSelectActive',
-        'renderer_class' => 'csWidgetFormSelectDoubleList',
-        'criteria' => $c
-      )));
+      $criteria->addJoin(CourseSubjectStudentPeer::STUDENT_ID, StudentPeer::ID);
+      $criteria->add(CourseSubjectStudentPeer::COURSE_SUBJECT_ID, $this->getObject()->getId());
+      $criteria->addJoin(StudentPeer::PERSON_ID, PersonPeer::ID);
+      $criteria->add(PersonPeer::IS_ACTIVE, true);
+      $criteria->addAscendingOrderByColumn(PersonPeer::LASTNAME);
 
-    $this->setValidator("student_list", new sfValidatorPropelChoiceMany(array(
-        "model" => "Student",
-        "required" => true,
-      )));
-  }
+      $css = CourseSubjectStudentPeer::doSelect($criteria);
 
-  protected function doSave($con = null)
-  {
-    $values = $this->getValues();
-    $course_subject = CourseSubjectPeer::retrieveByPk($values['course_subject_id']);
+    foreach ($css as $course_subject_student)
 
-    $con = (is_null($con)) ? $this->getConnection() : $con;
-
-    try
     {
-      $con->beginTransaction();
+      $widget_name = $course_subject_student->getId();
 
-      foreach ($values['student_list'] as $student_id)
+      $name = 'course_subject_non_numerical_califications_'. $this->getObject()->getId() . '_' . $widget_name;
+
+      $widgets[$name] = new sfWidgetFormInputCheckbox(array('default' => $course_subject_student->getIsNotAverageable()));
+
+      $validators[$name] = new sfValidatorBoolean();
+
+    }
+
+    $this->setWidgets($widgets);
+    $this->setValidators($validators);
+
+    $this->widgetSchema->setNameFormat('course_subject_non_numerical_califications['.$this->object->getId().'][%s]');
+    }
+
+
+    public function getJavaScripts()
+    {
+      return array_merge(parent::getJavaScripts(),array('course_subject_student_mark.js'));
+    }
+
+    protected function doSave($con = null)
+    {
+      $values = $this->getValues();
+
+      $c = new Criteria();
+      $c->add(CourseSubjectStudentMarkPeer::IS_CLOSED, false);
+
+      try
       {
-        $course_subject_student = CourseSubjectStudentPeer::retrievebyCourseSubjectAndStudent($course_subject->getid(), $student_id);
-        $course_subject_student->setIsNotAverageable(true);
-        $course_subject_student_marks = CourseSubjectStudentMarkPeer::retrieveByCourseSubjectStudent($course_subject_student->getId());
+        $con->beginTransaction();
 
-        foreach ($course_subject_student_marks as $mark)
+        foreach ($this->object->getCourseSubjectStudents() as $course_subject_student)
         {
-          $mark->setIsClosed(true);
-          $mark->save($con);
+          $exempt_value = $values['course_subject_non_numerical_califications_' . $course_subject_student->getCourseSubject()->getId() . '_' . $course_subject_student->getId()];
+
+          if (!is_null($exempt_value))
+          {
+            if ($exempt_value)
+            {
+              if (!$course_subject_student->getIsNotAverageable()){
+                $course_subject_student->exempt($con);
+              }
+            }
+            else {
+              $course_subject_student->undoExempt($con);
+            }
+          }
         }
 
-        $student_approved_course_subject = new StudentApprovedCourseSubject();
-        $student_approved_course_subject->setCourseSubject($course_subject);
-
-        $student_approved_course_subject->setStudentId($student_id);
-        $student_approved_course_subject->setSchoolYear($course_subject->getCareerSubjectSchoolYear()->getCareerSchoolYear()->getSchoolYear());
-
-        $student_approved_career_subject = new StudentApprovedCareerSubject();
-        $student_approved_career_subject->setStudentId($student_id);
-        $student_approved_career_subject->setCareerSubject($course_subject->getCareerSubjectSchoolYear()->getCareerSubject());
-        $student_approved_career_subject->setSchoolYear($course_subject->getCareerSubjectSchoolYear()->getCareerSchoolYear()->getSchoolYear());
-        $student_approved_career_subject->save($con);
-
-        $student_approved_course_subject->setStudentApprovedCareerSubject($student_approved_career_subject);
-        $student_approved_course_subject->save($con);
-
-        $course_subject_student->setStudentApprovedCourseSubject($student_approved_course_subject);
-        $course_subject_student->save($con);
+        $con->commit();
       }
-      $con->commit();
+      catch (Exception $e)
+      {
+        throw $e;
+        $con->rollBack();
+      }
     }
-    catch (Exception $e)
-    {
-      throw $e;
-      $con->rollBack();
-    }
-  }
-
 }
